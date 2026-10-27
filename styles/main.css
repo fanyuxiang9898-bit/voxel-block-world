@@ -584,3 +584,5 @@ html, body {
     font-size: 11px;
   }
 }
+
+#editStatus { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); color: white; text-shadow: 0 1px 4px black; z-index: 100; pointer-events: none; font-size: .85rem; text-align: center; }

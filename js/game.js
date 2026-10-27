@@ -9,6 +9,7 @@ import {
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance,
 } from './voxel.js';
+import { EditHistory } from './edit-history.js';
 import { AnimalManager } from './animals.js';
 
 /* ============================================
@@ -18,6 +19,15 @@ class Player {
   constructor(camera, world) {
     this.camera = camera;
     this.world = world;
+    this.editHistory = new EditHistory(
+      (x,y,z) => world.getBlock(x,y,z),
+      (x,y,z,type) => world.setBlock(x,y,z,type),
+      (x,y,z,type) => !isSolid(type) || !(
+        x + 1 > this.position.x - this.width / 2 && x < this.position.x + this.width / 2 &&
+        y + 1 > this.position.y && y < this.position.y + this.height &&
+        z + 1 > this.position.z - this.width / 2 && z < this.position.z + this.width / 2
+      )
+    );
 
     // 位置与速度
     this.position = new THREE.Vector3(5.4, -27.0, 22.6);
@@ -347,8 +357,7 @@ class Player {
     if (py < 0 || py >= CHUNK_HEIGHT) return false;
     if (this.world.getBlock(px, py, pz) !== BlockType.AIR) return false;
 
-    this.world.setBlock(px, py, pz, this.selectedBlock);
-    return true;
+    return this.editHistory.edit(px, py, pz, this.selectedBlock);
   }
 
   /** 破坏方块 */
@@ -358,8 +367,7 @@ class Player {
     const { x, y, z } = this.targetBlock;
     if (y < 0 || y >= CHUNK_HEIGHT) return false;
 
-    this.world.setBlock(x, y, z, BlockType.AIR);
-    return true;
+    return this.editHistory.edit(x, y, z, BlockType.AIR);
   }
 }
 
@@ -893,8 +901,24 @@ class Game {
 
   /** 绑定事件监听 */
   _initEvents() {
+    const editAction = (redo) => {
+      if (!(this.isPointerLocked || (this.isMobile && this.isRunning))) return;
+      const ok = redo ? this.player.editHistory.redo() : this.player.editHistory.undo();
+      document.getElementById('editStatus').textContent = ok ? (redo ? '已重做' : '已撤销') : '无法恢复：记录为空、区块未加载或位置被占用';
+    };
+    for (const [id, redo] of [['btnUndo', false], ['btnRedo', true]]) {
+      document.getElementById(id).addEventListener('pointerdown', e => {
+        e.preventDefault(); e.stopPropagation(); editAction(redo);
+      });
+    }
+    window.addEventListener('blur', () => { this.player.keys = {}; });
     // 键盘事件（桌面端 + 移动端外接键盘通用）
     document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyZ' || e.code === 'KeyY')) {
+        e.preventDefault();
+        if (!e.repeat) editAction(e.code === 'KeyY' || e.shiftKey);
+        return;
+      }
       this.player.keys[e.code] = true;
 
       // 数字键选择方块
@@ -912,6 +936,8 @@ class Game {
           this.isRunning = false;
           this.ui.pauseScreen.style.display = 'flex';
           this._showGameUI(false);
+        } else if (this.isPointerLocked) {
+          document.exitPointerLock();
         }
       }
 
@@ -977,6 +1003,7 @@ class Game {
           this.ui.pauseScreen.style.display = 'none';
           this._showGameUI(true);
         } else if (this.isRunning) {
+          this.player.keys = {};
           this.ui.pauseScreen.style.display = 'flex';
         }
       });
