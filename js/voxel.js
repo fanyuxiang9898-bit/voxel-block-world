@@ -463,6 +463,7 @@ export class World {
     this.noise = new SimplexNoise(seed);
     this.treeNoise = new SimplexNoise(seed + 777);
     this.chunks = new Map();
+    this.edits = new Map(); // Session-only edits survive chunk unloading.
     this.material = null;
     this.pendingChunks = [];
     this.renderDistance = RENDER_DISTANCE;
@@ -500,19 +501,23 @@ export class World {
   }
 
   setBlock(wx, wy, wz, type) {
-    if (wy < 0 || wy >= CHUNK_HEIGHT) return;
+    if (wy < 0 || wy >= CHUNK_HEIGHT) return false;
     const cx = Math.floor(wx / CHUNK_SIZE);
     const cz = Math.floor(wz / CHUNK_SIZE);
     const chunk = this.chunks.get(this.chunkKey(cx, cz));
-    if (!chunk) return;
+    if (!chunk) return false;
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     chunk.setBlock(lx, wy, lz, type);
+    const key = this.chunkKey(cx, cz);
+    if (!this.edits.has(key)) this.edits.set(key, new Map());
+    this.edits.get(key).set(lx + ',' + wy + ',' + lz, { lx, y: wy, lz, type });
 
     if (lx === 0) this._markDirty(cx - 1, cz);
     if (lx === CHUNK_SIZE - 1) this._markDirty(cx + 1, cz);
     if (lz === 0) this._markDirty(cx, cz - 1);
     if (lz === CHUNK_SIZE - 1) this._markDirty(cx, cz + 1);
+    return true;
   }
 
   _markDirty(cx, cz) {
@@ -734,6 +739,9 @@ export class World {
 
       const chunk = new Chunk(cx, cz);
       this.generateChunkData(chunk);
+      for (const edit of this.edits.get(key)?.values() ?? []) {
+        chunk.setBlock(edit.lx, edit.y, edit.lz, edit.type);
+      }
       chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial);
       this.chunks.set(key, chunk);
 
