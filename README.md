@@ -25,3 +25,9 @@ node --check js/voxel.js
 ```
 
 单元测试覆盖撤销/重做、历史容量、冲突、未加载区块、玩家碰撞及区块重新加载。世界逻辑测试替代了 WebGL 绘制，不代表移动端触摸实机验证。
+
+浏览器回归：
+node tests/browser.cjs <playwright模块路径> <Chromium或Edge程序路径>
+覆盖真实键鼠及移动触控模拟的放置、拆除、撤销、重做和暂停。
+
+GitHub Actions 在 PR 执行逻辑回归，main 通过后仅发布 index.html、js/、styles/ 到 GitHub Pages。

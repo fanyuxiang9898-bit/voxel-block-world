@@ -936,6 +936,8 @@ class Game {
           this.isRunning = false;
           this.ui.pauseScreen.style.display = 'flex';
           this._showGameUI(false);
+        } else if (this.isPointerLocked) {
+          document.exitPointerLock();
         }
       }
 
